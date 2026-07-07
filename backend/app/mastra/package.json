@@ -1,0 +1,23 @@
+{
+  "name": "crimemind-mastra",
+  "version": "0.1.0",
+  "description": "Mastra AI orchestration layer for CrimeMind AI",
+  "type": "module",
+  "scripts": {
+    "dev": "node --import tsx/esm src/server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.14.4",
+    "@mastra/core": "^1.50.0",
+    "hono": "^4.8.5",
+    "zod": "^3.25.67"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.0",
+    "tsx": "^4.20.3",
+    "typescript": "^5.8.3"
+  }
+}
