@@ -25,7 +25,117 @@ import {
   ChevronUp,
   Tags,
   Database,
+  FileSearch,
+  Check,
+  MessageSquare,
+  Bot,
+  Send,
+  ShieldAlert,
+  Cpu,
+  Network,
+  Lightbulb,
+  Eye,
+  Shield,
+  Info,
 } from "lucide-react";
+
+// --- Explainability Panel Component ---
+interface ExplainabilityData {
+  confidence: number;
+  reasoning: string;
+  supporting_cases: string[];
+  supporting_entities: string[];
+  limitations: string[];
+}
+
+function ExplainabilityPanel({ data }: { data: ExplainabilityData | null }) {
+  if (!data) return null;
+  const confColor =
+    data.confidence >= 80
+      ? "text-emerald-400 bg-emerald-500/10 border-emerald-500/20"
+      : data.confidence >= 50
+      ? "text-amber-400 bg-amber-500/10 border-amber-500/20"
+      : "text-red-400 bg-red-500/10 border-red-500/20";
+
+  return (
+    <details className="group rounded-xl border border-indigo-500/15 bg-indigo-950/10 overflow-hidden transition-all">
+      <summary className="flex items-center justify-between px-4 py-3 cursor-pointer select-none hover:bg-indigo-950/20 transition-colors">
+        <div className="flex items-center gap-2">
+          <span className="p-1 rounded bg-indigo-500/10 text-indigo-400">
+            <Eye size={12} />
+          </span>
+          <span className="text-xs font-bold text-indigo-300">Explainability &amp; Evidence Chain</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold border ${confColor}`}>
+            {data.confidence}% confidence
+          </span>
+          <ChevronDown size={14} className="text-indigo-400/60 group-open:rotate-180 transition-transform" />
+        </div>
+      </summary>
+      <div className="px-4 pb-4 pt-1 space-y-3 animate-in fade-in duration-200">
+        {/* Reasoning */}
+        <div className="space-y-1">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/60 flex items-center gap-1">
+            <Brain size={10} /> Reasoning
+          </p>
+          <p className="text-xs text-zinc-300 leading-relaxed bg-white/[0.02] rounded-lg border border-white/[0.04] px-3 py-2">
+            {data.reasoning}
+          </p>
+        </div>
+
+        {/* Supporting Entities */}
+        {data.supporting_entities.length > 0 && (
+          <div className="space-y-1">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/60 flex items-center gap-1">
+              <Tags size={10} /> Supporting Entities ({data.supporting_entities.length})
+            </p>
+            <div className="flex flex-wrap gap-1">
+              {data.supporting_entities.map((ent, i) => (
+                <span key={i} className="inline-flex items-center rounded bg-indigo-500/8 px-1.5 py-0.5 text-[9px] text-indigo-300 border border-indigo-500/15 font-mono">
+                  {ent}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Supporting Cases */}
+        {data.supporting_cases.length > 0 && (
+          <div className="space-y-1">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/60 flex items-center gap-1">
+              <FileSearch size={10} /> Supporting Cases ({data.supporting_cases.length})
+            </p>
+            <div className="flex flex-wrap gap-1">
+              {data.supporting_cases.map((c, i) => (
+                <span key={i} className="inline-flex items-center rounded bg-sky-500/8 px-1.5 py-0.5 text-[9px] text-sky-300 border border-sky-500/15 font-mono">
+                  {c}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Limitations */}
+        {data.limitations.length > 0 && (
+          <div className="space-y-1">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/60 flex items-center gap-1">
+              <Shield size={10} /> Limitations
+            </p>
+            <div className="space-y-1">
+              {data.limitations.map((lim, i) => (
+                <div key={i} className="flex items-start gap-1.5 text-[11px] text-amber-300/80">
+                  <AlertCircle size={10} className="mt-0.5 shrink-0 text-amber-500/60" />
+                  <span>{lim}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </details>
+  );
+}
 
 // --- API configuration ---
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
@@ -121,9 +231,33 @@ export default function UploadPage() {
   const [isEntitiesModalOpen, setIsEntitiesModalOpen] = useState(false);
   const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({});
   const [activeEntityFirId, setActiveEntityFirId] = useState<string | null>(null);
+  const [entitiesExplainability, setEntitiesExplainability] = useState<ExplainabilityData | null>(null);
 
   // --- Embedding / Indexing States ---
   const [indexingId, setIndexingId] = useState<string | null>(null);
+
+  // --- Similar Cases States ---
+  const [searchingSimilarId, setSearchingSimilarId] = useState<string | null>(null);
+  const [similarCases, setSimilarCases] = useState<any | null>(null);
+  const [isSimilarModalOpen, setIsSimilarModalOpen] = useState(false);
+  const [similarExplainability, setSimilarExplainability] = useState<ExplainabilityData | null>(null);
+
+  // --- Copilot States ---
+  const [isCopilotOpen, setIsCopilotOpen] = useState(false);
+  const [copilotFir, setCopilotFir] = useState<FIRItem | null>(null);
+  const [chatHistory, setChatHistory] = useState<any[]>([]);
+  const [inputMessage, setInputMessage] = useState("");
+  const [isCopilotTyping, setIsCopilotTyping] = useState(false);
+
+  // --- Recommendations States ---
+  const [isRecommendationsOpen, setIsRecommendationsOpen] = useState(false);
+  const [recommendationsFir, setRecommendationsFir] = useState<FIRItem | null>(null);
+  const [recommendations, setRecommendations] = useState<any[] | null>(null);
+  const [loadingRecommendations, setLoadingRecommendations] = useState(false);
+  const [recommendationsError, setRecommendationsError] = useState<string | null>(null);
+  const [completedRecommendations, setCompletedRecommendations] = useState<string[]>([]);
+  const [recommendationsFilter, setRecommendationsFilter] = useState("All");
+  const [recommendationsExplainability, setRecommendationsExplainability] = useState<ExplainabilityData | null>(null);
 
   // --- Fetch FIRs ---
   const fetchFIRs = async () => {
@@ -182,11 +316,21 @@ export default function UploadPage() {
       });
       if (res.ok) {
         const data = await res.json();
-        setSelectedEntities(data);
+        // The API now returns an explainability wrapper: { result, confidence, reasoning, ... }
+        const entityList = data.result || data;
+        const explainability: ExplainabilityData = {
+          confidence: data.confidence ?? 100,
+          reasoning: data.reasoning || "",
+          supporting_cases: data.supporting_cases || [],
+          supporting_entities: data.supporting_entities || [],
+          limitations: data.limitations || [],
+        };
+        setSelectedEntities(entityList);
+        setEntitiesExplainability(explainability);
         setIsEntitiesModalOpen(true);
         // Initialize all categories as expanded by default
         const initialExpanded: Record<string, boolean> = {};
-        data.forEach((entity: any) => {
+        (Array.isArray(entityList) ? entityList : []).forEach((entity: any) => {
           initialExpanded[entity.entity_type] = true;
         });
         setExpandedCategories(initialExpanded);
@@ -224,6 +368,141 @@ export default function UploadPage() {
       setIndexingId(null);
     }
   };
+
+  // --- Find Similar Cases ---
+  const handleFindSimilar = async (firId: string) => {
+    setSearchingSimilarId(firId);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/v1/firs/${firId}/similar`, {
+        method: "POST",
+      });
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.detail || "Failed to find similar cases.");
+      }
+      const data = await res.json();
+      setSimilarCases(data);
+      setSimilarExplainability({
+        confidence: data.confidence ?? 80,
+        reasoning: data.reasoning || "",
+        supporting_cases: data.supporting_cases || [],
+        supporting_entities: data.supporting_entities || [],
+        limitations: data.limitations || [],
+      });
+      setIsSimilarModalOpen(true);
+      showToast("success", "Similar Cases Found", "Retrieved similar historical cases successfully.");
+    } catch (err: any) {
+      console.error(err);
+      showToast("error", "Query Failed", err.message || "Failed to query similar cases.");
+    } finally {
+      setSearchingSimilarId(null);
+    }
+  };
+
+  // --- Copilot Handlers ---
+  const handleOpenCopilot = (fir: FIRItem) => {
+    setCopilotFir(fir);
+    setChatHistory([
+      {
+        sender: "copilot",
+        text: `Hello! I am your AI Investigation Copilot. I have analyzed case ${fir.case_number}. How can I assist you today?`,
+      },
+    ]);
+    setIsCopilotOpen(true);
+  };
+
+  const handleSendCopilotMessage = async (msgText: string) => {
+    if (!msgText.trim() || !copilotFir) return;
+
+    const userMsg = { sender: "user", text: msgText };
+    setChatHistory((prev) => [...prev, userMsg]);
+    setInputMessage("");
+    setIsCopilotTyping(true);
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/v1/firs/${copilotFir.id}/copilot`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question: msgText }),
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.detail || "Failed to get answer from copilot.");
+      }
+
+      const data = await res.json();
+      setChatHistory((prev) => [
+        ...prev,
+        {
+          sender: "copilot",
+          text: data.answer || data.result,
+          confidence: data.confidence,
+          reasoning: data.reasoning,
+          sources: data.sources,
+          workflowSteps: data.workflow_steps,
+          supporting_entities: data.supporting_entities || [],
+          supporting_cases: data.supporting_cases || [],
+          limitations: data.limitations || [],
+        },
+      ]);
+    } catch (err: any) {
+      console.error(err);
+      setChatHistory((prev) => [
+        ...prev,
+        {
+          sender: "copilot",
+          text: `Error: ${err.message || "Unable to reach the copilot service."}`,
+          isError: true,
+        },
+      ]);
+    } finally {
+      setIsCopilotTyping(false);
+    }
+  };
+
+  const handleFetchRecommendations = async (fir: FIRItem) => {
+    setRecommendationsFir(fir);
+    setIsRecommendationsOpen(true);
+    setRecommendations(null);
+    setRecommendationsError(null);
+    setLoadingRecommendations(true);
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/v1/firs/${fir.id}/recommendations`, {
+        method: "POST",
+      });
+
+      if (!res.ok) {
+        const errData = await res.json();
+        if (res.status === 400 && errData.detail?.includes("blocked")) {
+          throw new Error("Request blocked by AI safety policy. " + (errData.detail || ""));
+        }
+        throw new Error(errData.detail || "Failed to load next investigation steps.");
+      }
+
+      const data = await res.json();
+      setRecommendationsExplainability({
+        confidence: data.confidence ?? 80,
+        reasoning: data.reasoning || "",
+        supporting_cases: data.supporting_cases || [],
+        supporting_entities: data.supporting_entities || [],
+        limitations: data.limitations || [],
+      });
+      if (data.message && (!data.recommendations || data.recommendations.length === 0)) {
+        setRecommendationsError(data.message);
+      } else {
+        setRecommendations(data.recommendations || []);
+      }
+    } catch (err: any) {
+      console.error(err);
+      setRecommendationsError(err.message || "Failed to retrieve recommendations.");
+    } finally {
+      setLoadingRecommendations(false);
+    }
+  };
+
+
 
   // --- Toast Manager ---
   const showToast = (type: "success" | "error" | "info", title: string, message: string) => {
@@ -729,6 +1008,43 @@ export default function UploadPage() {
                                 )}
                               </button>
                               <button
+                                onClick={() => handleFindSimilar(fir.id)}
+                                disabled={extractingId !== null || extractingEntitiesId !== null || indexingId !== null || searchingSimilarId !== null}
+                                className={`p-1.5 rounded-lg transition-all flex items-center justify-center disabled:opacity-50 ${
+                                  fir.embedding 
+                                    ? "text-sky-400 hover:text-sky-300 hover:bg-sky-500/10" 
+                                    : "text-muted-foreground/40 hover:text-sky-400 hover:bg-sky-500/10 cursor-not-allowed"
+                                }`}
+                                title={fir.embedding ? "Find Similar Cases" : "Index this document first to find similar cases"}
+                              >
+                                {searchingSimilarId === fir.id ? (
+                                  <Loader2 size={15} className="animate-spin text-sky-400" />
+                                ) : (
+                                  <FileSearch size={15} />
+                                )}
+                              </button>
+                              <button
+                                onClick={() => handleOpenCopilot(fir)}
+                                className="text-muted-foreground hover:text-emerald-400 p-1.5 rounded-lg hover:bg-emerald-500/10 transition-all"
+                                title="Chat with AI Copilot"
+                              >
+                                <MessageSquare size={15} />
+                              </button>
+                              <Link
+                                href={`/investigations/${fir.id}/graph`}
+                                className="text-muted-foreground hover:text-indigo-400 p-1.5 rounded-lg hover:bg-indigo-500/10 transition-all flex items-center justify-center"
+                                title="View Relationship Graph"
+                              >
+                                <Network size={15} />
+                              </Link>
+                              <button
+                                onClick={() => handleFetchRecommendations(fir)}
+                                className="text-muted-foreground hover:text-amber-400 p-1.5 rounded-lg hover:bg-amber-500/10 transition-all flex items-center justify-center"
+                                title="AI Investigation Recommendations"
+                              >
+                                <Lightbulb size={15} />
+                              </button>
+                              <button
                                 onClick={() => handleDelete(fir.id)}
                                 disabled={extractingId !== null || extractingEntitiesId !== null || indexingId !== null}
                                 className="text-muted-foreground hover:text-red-400 p-1.5 rounded-lg hover:bg-red-500/10 transition-all disabled:opacity-50"
@@ -1027,6 +1343,11 @@ export default function UploadPage() {
               )}
             </div>
 
+            {/* Explainability Panel */}
+            <div className="px-6 pb-2">
+              <ExplainabilityPanel data={entitiesExplainability} />
+            </div>
+
             {/* Modal Footer */}
             <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-white/[0.06] bg-white/[0.01]">
               <Button
@@ -1041,6 +1362,535 @@ export default function UploadPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Similar Cases Modal */}
+      {isSimilarModalOpen && similarCases && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="card-glass w-full max-w-3xl rounded-2xl border border-white/[0.08] shadow-2xl overflow-hidden flex flex-col max-h-[85vh] animate-in zoom-in-95 duration-200">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-white/[0.06] bg-white/[0.01]">
+              <div>
+                <h3 className="text-base font-bold text-zinc-100 flex items-center gap-2">
+                  <span className="p-1 rounded bg-sky-500/10 text-sky-400">
+                    <FileSearch size={16} />
+                  </span>
+                  Similar Case Matches
+                </h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Query Case: <span className="font-semibold text-zinc-300">{similarCases.query_fir}</span>
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setIsSimilarModalOpen(false);
+                  setSimilarCases(null);
+                }}
+                className="text-muted-foreground hover:text-zinc-200 transition-colors p-1"
+              >
+                <XCircle size={18} />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
+              {similarCases.matches.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 text-center">
+                  <span className="p-3 rounded-full bg-zinc-800/40 text-muted-foreground/60 mb-3 border border-white/[0.04]">
+                    <AlertCircle size={28} />
+                  </span>
+                  <h4 className="text-sm font-bold text-zinc-300">No Similar Cases Found</h4>
+                  <p className="text-xs text-muted-foreground/80 mt-1 max-w-xs">
+                    We couldn't find any historical FIRs matching the semantic profile of this document.
+                  </p>
+                </div>
+              ) : (
+                <div className="relative border-l border-white/[0.06] pl-6 ml-3 space-y-8">
+                  {similarCases.matches.map((match: any, index: number) => {
+                    const similarityColor = match.similarity >= 85
+                      ? "text-emerald-400 bg-emerald-500/10 border-emerald-500/20"
+                      : match.similarity >= 60
+                      ? "text-amber-400 bg-amber-500/10 border-amber-500/20"
+                      : "text-slate-400 bg-slate-500/10 border-slate-500/20";
+                    
+                    return (
+                      <div key={match.fir_id} className="relative group">
+                        {/* Timeline node */}
+                        <div className="absolute -left-[31px] top-1.5 w-3 h-3 rounded-full bg-zinc-900 border-2 border-sky-500 group-hover:scale-125 transition-transform" />
+
+                        {/* Card */}
+                        <div className="card-glass p-5 rounded-xl border border-white/[0.06] hover:border-white/[0.12] transition-all bg-white/[0.01]">
+                          <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-bold text-sky-400 uppercase tracking-wider">
+                                #{index + 1}
+                              </span>
+                              <h4 className="text-sm font-bold text-zinc-100">
+                                {match.case_number}
+                              </h4>
+                              <span className="inline-flex items-center rounded bg-white/[0.04] px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground border border-white/[0.06] capitalize">
+                                {match.crime_type}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-bold border ${similarityColor}`}>
+                                {match.similarity}% Match
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Reasons List */}
+                          <div className="space-y-1.5 mb-4">
+                            <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/60 mb-2">
+                              Similarity Reasons
+                            </p>
+                            {match.reasons.map((reason: string, rIdx: number) => (
+                              <div key={rIdx} className="flex items-start gap-2 text-xs text-zinc-300">
+                                <span className="text-emerald-400 mt-0.5 bg-emerald-500/10 p-0.5 rounded-full shrink-0">
+                                  <Check size={8} />
+                                </span>
+                                <span>{reason}</span>
+                              </div>
+                            ))}
+                          </div>
+
+                          {/* View details action */}
+                          <div className="flex items-center justify-between border-t border-white/[0.04] pt-3.5 mt-3">
+                            <div className="text-[10px] text-muted-foreground uppercase">
+                              Status: <span className="font-bold text-zinc-400 capitalize">{match.status.replace("_", " ")}</span>
+                            </div>
+                            <Button
+                              onClick={async () => {
+                                try {
+                                  setIsSimilarModalOpen(false);
+                                  const resExt = await fetch(`${API_BASE_URL}/api/v1/firs/${match.fir_id}/extract`, { method: "POST" });
+                                  if (resExt.ok) {
+                                    const extData = await resExt.json();
+                                    setSelectedExtraction(extData);
+                                    setIsExtractionModalOpen(true);
+                                  } else {
+                                    showToast("error", "Error", "Failed to retrieve case details.");
+                                  }
+                                } catch (e) {
+                                  showToast("error", "Error", "Could not load case details.");
+                                }
+                              }}
+                              className="bg-white/5 hover:bg-white/10 text-zinc-300 border border-white/[0.06] text-xs font-semibold px-3 py-1 rounded-lg transition-colors flex items-center gap-1.5 h-7"
+                            >
+                              <FileText size={12} />
+                              View Details
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Explainability Panel */}
+            <div className="px-6 pb-2">
+              <ExplainabilityPanel data={similarExplainability} />
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-white/[0.06] bg-white/[0.01]">
+              <Button
+                onClick={() => {
+                  setIsSimilarModalOpen(false);
+                  setSimilarCases(null);
+                }}
+                className="bg-white/10 hover:bg-white/20 text-white font-medium text-xs px-4 py-2 rounded-lg transition-colors border border-white/10"
+              >
+                Close
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Investigation Copilot Sidebar Drawer */}
+      {isCopilotOpen && copilotFir && (
+        <>
+          {/* Backdrop */}
+          <div
+            onClick={() => setIsCopilotOpen(false)}
+            className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm transition-all duration-300 animate-in fade-in"
+          />
+
+          {/* Drawer Panel */}
+          <div className="fixed top-0 right-0 z-50 h-full w-full sm:w-[460px] bg-zinc-950/95 border-l border-white/[0.08] shadow-2xl backdrop-blur-xl flex flex-col animate-in slide-in-from-right duration-300">
+            {/* Header */}
+            <div className="px-5 py-4 border-b border-white/[0.06] bg-white/[0.01] flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <span className="p-2 rounded-lg bg-emerald-500/10 text-emerald-400">
+                  <Bot size={18} />
+                </span>
+                <div>
+                  <h3 className="text-sm font-bold text-zinc-100">AI Investigation Copilot</h3>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">
+                    Analyzing case <span className="font-semibold text-zinc-300">{copilotFir.case_number}</span>
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsCopilotOpen(false)}
+                className="text-muted-foreground hover:text-zinc-200 transition-colors p-1.5 rounded-lg hover:bg-white/5"
+              >
+                <XCircle size={18} />
+              </button>
+            </div>
+
+            {/* Suggested Question Chips */}
+            <div className="px-5 py-3 border-b border-white/[0.04] bg-white/[0.01]">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/60 mb-2">
+                Suggested Questions
+              </p>
+              <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto">
+                {[
+                  { label: "Summarize FIR", text: "Summarize this FIR." },
+                  { label: "Who are the suspects?", text: "Who are the main suspects?" },
+                  { label: "Show similar cases", text: "Show similar cases." },
+                  { label: "List evidence", text: "What evidence is available?" },
+                  { label: "Show locations", text: "Which locations appear repeatedly?" }
+                ].map((sug) => (
+                  <button
+                    key={sug.label}
+                    onClick={() => handleSendCopilotMessage(sug.text)}
+                    disabled={isCopilotTyping}
+                    className="text-[11px] text-zinc-300 bg-white/5 border border-white/[0.06] hover:bg-white/10 hover:border-white/[0.12] rounded-full px-2.5 py-1 transition-all disabled:opacity-50"
+                  >
+                    {sug.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Chat Body */}
+            <div className="flex-1 overflow-y-auto p-5 space-y-4">
+              {chatHistory.map((chat, idx) => (
+                <div
+                  key={idx}
+                  className={`flex ${chat.sender === "user" ? "justify-end" : "justify-start"}`}
+                >
+                  <div
+                    className={`max-w-[85%] rounded-2xl p-4 text-xs leading-relaxed border ${
+                      chat.sender === "user"
+                        ? "bg-primary text-primary-foreground border-primary/20 rounded-tr-none"
+                        : chat.isError
+                        ? "bg-red-500/10 border-red-500/25 text-red-300 rounded-tl-none"
+                        : "bg-white/[0.02] border-white/[0.06] text-zinc-200 rounded-tl-none"
+                    }`}
+                  >
+                    <p className="whitespace-pre-wrap select-text">{chat.text}</p>
+
+                    {/* Copilot Metadata & Sources */}
+                    {chat.sender === "copilot" && !chat.isError && (
+                      <div className="mt-3.5 pt-3 border-t border-white/[0.04] space-y-2">
+                        {/* Confidence Indicator */}
+                        {chat.confidence !== undefined && (
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[10px] text-muted-foreground">Confidence:</span>
+                            <span
+                              className={`inline-flex items-center rounded-full px-1.5 py-0.25 text-[9px] font-bold border ${
+                                chat.confidence >= 80
+                                  ? "text-emerald-400 bg-emerald-500/10 border-emerald-500/20"
+                                  : chat.confidence >= 50
+                                  ? "text-amber-400 bg-amber-500/10 border-amber-500/20"
+                                  : "text-red-400 bg-red-500/10 border-red-500/20"
+                              }`}
+                            >
+                              {chat.confidence}%
+                            </span>
+                          </div>
+                        )}
+
+                        {/* Sources cited */}
+                        {chat.sources && chat.sources.length > 0 && (
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span className="text-[10px] text-muted-foreground">Sources:</span>
+                            {chat.sources.map((src: string) => (
+                              <span
+                                key={src}
+                                className="inline-flex items-center rounded bg-white/[0.04] px-1 py-0.25 text-[9px] text-zinc-400 border border-white/[0.06] font-mono capitalize"
+                              >
+                                {src.replace("_", " ")}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Mastra Workflow Steps Collapsible */}
+                        {chat.workflowSteps && chat.workflowSteps.length > 0 && (
+                          <div className="text-[10px]">
+                            <details className="outline-none group">
+                              <summary className="text-muted-foreground/80 hover:text-zinc-300 cursor-pointer select-none font-semibold flex items-center gap-1">
+                                <Cpu size={9} />
+                                View Mastra Workflow Steps
+                              </summary>
+                              <div className="pl-3 mt-1.5 border-l border-emerald-500/30 py-1 space-y-1 animate-in fade-in duration-200">
+                                {chat.workflowSteps.map((step: string, sIdx: number) => (
+                                  <div key={step} className="flex items-center gap-1.5 text-zinc-400 font-mono text-[9px]">
+                                    <span className="text-emerald-400">Step {sIdx + 1}:</span>
+                                    <span>{step}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </details>
+                          </div>
+                        )}
+
+                        {/* Explainability: Reasoning */}
+                        {chat.reasoning && (
+                          <div className="text-[10px]">
+                            <details className="outline-none group">
+                              <summary className="text-muted-foreground/80 hover:text-zinc-300 cursor-pointer select-none font-semibold flex items-center gap-1">
+                                <Eye size={9} />
+                                View Reasoning & Evidence
+                              </summary>
+                              <div className="pl-3 mt-1.5 border-l border-indigo-500/30 py-1 space-y-2 animate-in fade-in duration-200">
+                                <p className="text-zinc-400 text-[10px] leading-relaxed">{chat.reasoning}</p>
+                                {chat.supporting_entities && chat.supporting_entities.length > 0 && (
+                                  <div className="flex flex-wrap gap-1">
+                                    {chat.supporting_entities.map((ent: string, ei: number) => (
+                                      <span key={ei} className="inline-flex items-center rounded bg-indigo-500/8 px-1 py-0.25 text-[8px] text-indigo-300 border border-indigo-500/15 font-mono">
+                                        {ent}
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
+                                {chat.limitations && chat.limitations.length > 0 && (
+                                  <div className="space-y-0.5">
+                                    {chat.limitations.map((lim: string, li: number) => (
+                                      <div key={li} className="flex items-start gap-1 text-[9px] text-amber-300/70">
+                                        <AlertCircle size={8} className="mt-0.5 shrink-0" />
+                                        <span>{lim}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            </details>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+
+              {/* Typing state */}
+              {isCopilotTyping && (
+                <div className="flex justify-start">
+                  <div className="bg-white/[0.02] border border-white/[0.06] rounded-2xl rounded-tl-none p-4 max-w-[85%] flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-bounce" />
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-bounce delay-100" />
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-bounce delay-200" />
+                    <span className="text-[11px] text-muted-foreground ml-1">Copilot is running Mastra workflow...</span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Input Footer */}
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleSendCopilotMessage(inputMessage);
+              }}
+              className="p-4 border-t border-white/[0.06] bg-black/20 flex gap-2"
+            >
+              <input
+                type="text"
+                value={inputMessage}
+                onChange={(e) => setInputMessage(e.target.value)}
+                placeholder="Ask about victims, suspects, timeline, similar cases..."
+                disabled={isCopilotTyping}
+                className="flex-1 bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-2 text-xs text-zinc-100 placeholder-muted-foreground/60 focus:outline-none focus:border-emerald-500/50 transition-all disabled:opacity-50"
+              />
+              <Button
+                type="submit"
+                disabled={!inputMessage.trim() || isCopilotTyping}
+                className="bg-emerald-500 hover:bg-emerald-600 text-zinc-950 font-bold p-2.5 rounded-xl transition-colors h-[34px] w-[34px] flex items-center justify-center shrink-0 disabled:opacity-50"
+              >
+                <Send size={14} />
+              </Button>
+            </form>
+          </div>
+        </>
+      )}
+
+      {/* AI Investigation Recommendations Drawer */}
+      {isRecommendationsOpen && recommendationsFir && (
+        <>
+          {/* Backdrop */}
+          <div
+            onClick={() => setIsRecommendationsOpen(false)}
+            className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm transition-all duration-300 animate-in fade-in"
+          />
+
+          {/* Drawer Panel */}
+          <div className="fixed top-0 right-0 z-50 h-full w-full sm:w-[460px] bg-zinc-950/95 border-l border-white/[0.08] shadow-2xl backdrop-blur-xl flex flex-col animate-in slide-in-from-right duration-300">
+            {/* Header */}
+            <div className="px-5 py-4 border-b border-white/[0.06] bg-white/[0.01] flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <span className="p-2 rounded-lg bg-amber-500/10 text-amber-400">
+                  <Lightbulb size={18} />
+                </span>
+                <div>
+                  <h3 className="text-sm font-bold text-zinc-100">AI Investigation Leads</h3>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">
+                    Recommended steps for <span className="font-semibold text-zinc-300">{recommendationsFir.case_number}</span>
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsRecommendationsOpen(false)}
+                className="text-muted-foreground hover:text-zinc-200 transition-colors p-1.5 rounded-lg hover:bg-white/5"
+              >
+                <XCircle size={18} />
+              </button>
+            </div>
+
+            {/* Category Filter Pills */}
+            <div className="px-5 py-3 border-b border-white/[0.04] bg-white/[0.01] overflow-x-auto flex gap-1.5 scrollbar-thin">
+              {["All", "Evidence Collection", "Witness Actions", "Location Investigation", "Suspect Investigation"].map((cat) => (
+                <button
+                  key={cat}
+                  onClick={() => setRecommendationsFilter(cat)}
+                  className={`px-3 py-1 rounded-full text-[10px] font-bold whitespace-nowrap transition-all border ${
+                    recommendationsFilter === cat
+                      ? "bg-amber-500/10 text-amber-400 border-amber-500/30"
+                      : "bg-white/[0.02] text-zinc-400 border-white/[0.05] hover:bg-white/5"
+                  }`}
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
+
+            {/* Explainability Panel */}
+            {recommendationsExplainability && !loadingRecommendations && (
+              <div className="px-5 py-2 border-b border-white/[0.04]">
+                <ExplainabilityPanel data={recommendationsExplainability} />
+              </div>
+            )}
+
+            {/* Body */}
+            <div className="flex-1 overflow-y-auto p-5 space-y-4">
+              {loadingRecommendations ? (
+                <div className="h-48 flex flex-col items-center justify-center text-center space-y-3">
+                  <Loader2 size={24} className="animate-spin text-amber-400" />
+                  <p className="text-xs text-muted-foreground">Running Gemini investigation models...</p>
+                </div>
+              ) : recommendationsError ? (
+                <div className="card-glass border border-white/[0.08] bg-zinc-900/40 rounded-2xl p-5 text-center space-y-3">
+                  <div className="p-2.5 rounded-full bg-amber-500/5 text-amber-400 w-fit mx-auto border border-amber-500/10">
+                    <AlertCircle size={20} />
+                  </div>
+                  <p className="text-xs font-semibold text-zinc-200">Recommendations Status</p>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    {recommendationsError}
+                  </p>
+                </div>
+              ) : recommendations && recommendations.length === 0 ? (
+                <div className="text-center py-12">
+                  <p className="text-xs text-muted-foreground">No actionable recommendations found.</p>
+                </div>
+              ) : (
+                <div className="space-y-3.5">
+                  {(recommendations || [])
+                    .filter((rec) => recommendationsFilter === "All" || rec.category === recommendationsFilter)
+                    .map((rec, idx) => {
+                      const isCompleted = completedRecommendations.includes(rec.title);
+                      return (
+                        <div
+                          key={idx}
+                          className={`card-glass border rounded-2xl p-4 transition-all duration-300 flex flex-col gap-3.5 ${
+                            isCompleted
+                              ? "border-emerald-500/20 bg-emerald-950/5 opacity-60"
+                              : "border-white/[0.08] bg-white/[0.01] hover:border-white/[0.15]"
+                          }`}
+                        >
+                          {/* Top Row: Category badge & Priority */}
+                          <div className="flex items-center justify-between">
+                            <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-white/[0.04] text-zinc-300 border border-white/[0.06]">
+                              {rec.category}
+                            </span>
+                            <div className="flex items-center gap-2">
+                              <span
+                                className={`px-2 py-0.5 rounded text-[9px] font-bold border ${
+                                  rec.priority === "High"
+                                    ? "bg-red-500/10 text-red-400 border-red-500/20"
+                                    : rec.priority === "Medium"
+                                    ? "bg-amber-500/10 text-amber-400 border-amber-500/20"
+                                    : "bg-zinc-500/10 text-zinc-400 border-zinc-500/20"
+                                }`}
+                              >
+                                {rec.priority} Priority
+                              </span>
+                              <span className="text-[10px] text-muted-foreground font-medium">
+                                {rec.confidence}% confidence
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Title & Description */}
+                          <div className="space-y-1.5">
+                            <h4
+                              className={`text-xs font-bold leading-snug select-text ${
+                                isCompleted ? "line-through text-zinc-500" : "text-zinc-100"
+                              }`}
+                            >
+                              {rec.title}
+                            </h4>
+                            <p className="text-[11px] text-muted-foreground select-text leading-relaxed">
+                              {rec.reason}
+                            </p>
+                          </div>
+
+                          {/* Footer Action Bar */}
+                          <div className="flex items-center justify-between border-t border-white/[0.04] pt-3.5 mt-0.5">
+                            {/* Mark completed */}
+                            <button
+                              onClick={() => {
+                                setCompletedRecommendations((prev) =>
+                                  isCompleted
+                                    ? prev.filter((t) => t !== rec.title)
+                                    : [...prev, rec.title]
+                                );
+                              }}
+                              className={`flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-1.5 rounded-lg border transition-all ${
+                                isCompleted
+                                  ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20"
+                                  : "bg-white/[0.02] text-zinc-400 border-white/[0.05] hover:bg-white/5"
+                              }`}
+                            >
+                              <Check size={11} />
+                              {isCompleted ? "Completed" : "Mark Done"}
+                            </button>
+
+                            {/* Copy recommendation */}
+                            <button
+                              onClick={() => {
+                                navigator.clipboard.writeText(`[${rec.category}] ${rec.title}\nReason: ${rec.reason}`);
+                                showToast("success", "Copied", "Lead details copied to clipboard");
+                              }}
+                              className="p-1.5 rounded-lg bg-white/[0.02] border border-white/[0.05] text-muted-foreground hover:text-zinc-200 hover:bg-white/5 transition-all flex items-center justify-center"
+                              title="Copy details"
+                            >
+                              <Copy size={11} />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                </div>
+              )}
+            </div>
+          </div>
+        </>
       )}
 
       {/* Floating Animated Toasts Container */}

@@ -15,6 +15,7 @@ import app.models.fir  # noqa: F401
 import app.models.fir_document_content  # noqa: F401
 import app.models.fir_entity  # noqa: F401
 import app.models.fir_embedding  # noqa: F401
+import app.models.guardrail_log  # noqa: F401
 
 logger = logging.getLogger(__name__)
 

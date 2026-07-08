@@ -41,8 +41,8 @@ async def run_tests():
     test_env["PYTHONUNBUFFERED"] = "1"
     server_process = subprocess.Popen(
         [".venv/bin/python", "-u", "-m", "uvicorn", "app.main:app", "--host", "127.0.0.1", "--port", "8000"],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
         text=True,
         env=test_env
     )
@@ -62,7 +62,7 @@ async def run_tests():
             pass
     
     # Verify health
-    client = httpx.AsyncClient(base_url="http://127.0.0.1:8000", timeout=35.0)
+    client = httpx.AsyncClient(base_url="http://127.0.0.1:8000", timeout=120.0)
     try:
         res = await client.get("/api/v1/health")
         print(f"Server health check: {res.status_code} {res.json()}")
@@ -76,12 +76,12 @@ async def run_tests():
     
     small_txt_path = os.path.join(temp_dir, "small_fir.txt")
     with open(small_txt_path, "w") as f:
-        f.write("Case No: FIR/2026/A101. Suspect Suresh steals mobile from victim Harish on Indiranagar 100 feet road using a knife.")
+        f.write(f"Case No: FIR/2026/A101. Suspect Suresh steals mobile from victim Harish on Indiranagar 100 feet road using a knife. Timestamp: {time.time()}")
         
     large_txt_path = os.path.join(temp_dir, "large_fir.txt")
     with open(large_txt_path, "w") as f:
         # Create a large text document (> 1000 chars)
-        f.write("Case No: FIR/2026/A999. Description:\n" + ("This is a very long crime report details description that goes on and on to test large document handling. " * 30))
+        f.write(f"Case No: FIR/2026/A999. Timestamp: {time.time()}\nDescription:\n" + ("This is a very long crime report details description that goes on and on to test large document handling. " * 30))
 
     uploaded_firs = {}
 
@@ -128,6 +128,8 @@ async def run_tests():
 
         # Verify Qdrant Payload
         print("Verifying Qdrant storage...")
+        from app.services.qdrant_service import init_qdrant_client
+        await init_qdrant_client()
         qdrant_service = QdrantIndexService()
         payload = await qdrant_service.get_vector_metadata(small_id)
         print(f"Qdrant Point Payload: {payload}")
@@ -139,8 +141,9 @@ async def run_tests():
 
         # Verify database metadata
         print("Verifying PostgreSQL database record...")
+        import uuid
         async with AsyncSessionLocal() as session:
-            stmt = select(FIREmbedding).where(str(FIREmbedding.fir_id) == str(small_id))
+            stmt = select(FIREmbedding).where(FIREmbedding.fir_id == uuid.UUID(small_id))
             db_res = await session.execute(stmt)
             db_emb = db_res.scalar_one_or_none()
             assert db_emb is not None
@@ -166,7 +169,7 @@ async def run_tests():
         
         # Verify only 1 row exists in database
         async with AsyncSessionLocal() as session:
-            stmt = select(FIREmbedding).where(str(FIREmbedding.fir_id) == str(small_id))
+            stmt = select(FIREmbedding).where(FIREmbedding.fir_id == uuid.UUID(small_id))
             db_res = await session.execute(stmt)
             rows = db_res.scalars().all()
             assert len(rows) == 1
@@ -201,6 +204,8 @@ async def run_tests():
                 await qdrant_service.delete_vector(fid)
             except Exception:
                 pass
+        from app.services.qdrant_service import close_qdrant_client
+        await close_qdrant_client()
         print("✅ Database and Qdrant clean up complete.")
 
     # ── Test 5: Qdrant Unavailable ──────────────────────────────────

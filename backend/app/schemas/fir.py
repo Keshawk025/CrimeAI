@@ -65,3 +65,14 @@ class FIRUploadResponse(BaseModel):
 class FIRDeleteResponse(BaseModel):
     id: uuid.UUID
     message: str = "FIR deleted successfully"
+
+
+class CopilotQuestionRequest(BaseModel):
+    question: str = Field(..., min_length=1)
+
+
+class CopilotResponse(BaseModel):
+    answer: str
+    sources: list[str]
+    confidence: int
+

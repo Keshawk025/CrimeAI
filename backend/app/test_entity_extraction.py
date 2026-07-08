@@ -3,6 +3,7 @@ import os
 import shutil
 import sys
 import tempfile
+import traceback
 import time
 from pathlib import Path
 
@@ -53,32 +54,36 @@ async def run_tests():
         test_env["PYTHONUNBUFFERED"] = "1"
         server_process = subprocess.Popen(
             [".venv/bin/python", "-u", "-m", "uvicorn", "app.main:app", "--host", "127.0.0.1", "--port", "8000"],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
             text=True,
             env=test_env
         )
         
-        # Wait for server to boot
-        time.sleep(5)
-        
-        # Check if the process exited immediately
-        poll_status = server_process.poll()
-        if poll_status is not None:
-            print(f"❌ Server process exited immediately with code {poll_status}")
-            stdout, stderr = server_process.communicate()
-            print("--- SERVER STDOUT ---")
-            print(stdout)
-            print("--- SERVER STDERR ---")
-            print(stderr)
-            sys.exit(1)
-            
-        # Verify health
-        try:
-            res = await client.get("/api/v1/health")
-            print(f"Server health check: {res.status_code} {res.json()}")
-        except Exception as e:
-            print(f"❌ Server failed to start: {e}")
+        # Wait for server to boot (polling)
+        print("Waiting for server to boot...")
+        booted = False
+        for _ in range(30):
+            time.sleep(1)
+            poll_status = server_process.poll()
+            if poll_status is not None:
+                print(f"❌ Server process exited immediately with code {poll_status}")
+                stdout, stderr = server_process.communicate()
+                print("--- SERVER STDOUT ---")
+                print(stdout)
+                print("--- SERVER STDERR ---")
+                print(stderr)
+                sys.exit(1)
+            try:
+                res = await client.get("/api/v1/health")
+                if res.status_code == 200:
+                    booted = True
+                    break
+            except Exception:
+                pass
+
+        if not booted:
+            print("❌ Server failed to start: All connection attempts failed")
             server_process.terminate()
             stdout, stderr = server_process.communicate()
             print("--- SERVER STDOUT ---")
@@ -86,6 +91,8 @@ async def run_tests():
             print("--- SERVER STDERR ---")
             print(stderr)
             sys.exit(1)
+        else:
+            print("✅ Server booted successfully.")
 
     # Prepare real and corrupted test files
     temp_dir = tempfile.mkdtemp()
@@ -166,6 +173,8 @@ async def run_tests():
         res = await client.post(f"/api/v1/firs/{short_id}/entities")
         assert res.status_code == 200, f"Short FIR Entity Extraction failed: {res.status_code} {res.text}"
         entities = res.json()
+        if isinstance(entities, dict) and "result" in entities:
+            entities = entities["result"]
         print(f"✅ Extracted {len(entities)} entities from Short FIR.")
         
         # Verify basic expected entities (victims, suspects, weapons, phones, emails, locations)
@@ -185,6 +194,8 @@ async def run_tests():
         res = await client.post(f"/api/v1/firs/{long_id}/entities")
         assert res.status_code == 200, f"Long FIR Entity Extraction failed: {res.status_code} {res.text}"
         entities_long = res.json()
+        if isinstance(entities_long, dict) and "result" in entities_long:
+            entities_long = entities_long["result"]
         print(f"✅ Extracted {len(entities_long)} entities from Long FIR.")
         
         types_long = [e["entity_type"] for e in entities_long]
@@ -202,6 +213,8 @@ async def run_tests():
         res = await client.post(f"/api/v1/firs/{kannada_id}/entities")
         assert res.status_code == 200, f"Kannada FIR Entity Extraction failed: {res.status_code} {res.text}"
         entities_kannada = res.json()
+        if isinstance(entities_kannada, dict) and "result" in entities_kannada:
+            entities_kannada = entities_kannada["result"]
         print(f"✅ Extracted {len(entities_kannada)} entities from Kannada FIR.")
 
         # Test 4: Empty FIR Entity Extraction
@@ -210,6 +223,8 @@ async def run_tests():
         res = await client.post(f"/api/v1/firs/{empty_id}/entities")
         assert res.status_code == 200, f"Empty FIR Entity Extraction failed: {res.status_code} {res.text}"
         entities_empty = res.json()
+        if isinstance(entities_empty, dict) and "result" in entities_empty:
+            entities_empty = entities_empty["result"]
         print(f"✅ Empty FIR returned {len(entities_empty)} entities.")
         assert len(entities_empty) == 0, f"Expected 0 entities, got {len(entities_empty)}"
 
@@ -217,7 +232,9 @@ async def run_tests():
         print("\n[Test 5] Triggering Invalid response simulation and verifying Retry mechanism...")
         res = await client.post(f"/api/v1/firs/{short_id}/entities?force_invalid_once=true")
         assert res.status_code == 200, f"Retry mechanism test failed: {res.status_code} {res.text}"
-        print(f"✅ Retry mechanism succeeded. Extracted {len(res.json())} entities after retry.")
+        res_data = res.json()
+        entities_count = len(res_data["result"]) if isinstance(res_data, dict) and "result" in res_data else len(res_data)
+        print(f"✅ Retry mechanism succeeded. Extracted {entities_count} entities after retry.")
 
         # Test 6: Database storage verification
         print("\n[Test 6] Verifying records in PostgreSQL...")
@@ -251,7 +268,11 @@ async def run_tests():
             new_count = len((await session.execute(count_stmt)).scalars().all())
             print(f"New count in DB: {new_count}")
             assert new_count == initial_count or new_count > 0, "Row count changed unexpectedly or went to 0!"
-
+        
+    except Exception as e:
+        print("\n❌ TEST SUITE RUN ENCOUNTERED AN EXCEPTION:")
+        traceback.print_exc()
+        raise e
     finally:
         # Cleanup uploaded files and entities from DB
         print("\nCleaning up uploaded files and DB entities...")

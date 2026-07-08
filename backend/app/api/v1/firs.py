@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import logging
 import uuid
+from typing import Dict, Any, List, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,6 +25,8 @@ from app.schemas.fir import (
     FIRListResponse,
     FIRRead,
     FIRUploadResponse,
+    CopilotQuestionRequest,
+    CopilotResponse,
 )
 from app.schemas.fir_document_content import FIRDocumentContentRead
 from app.schemas.fir_entity import FIREntityRead
@@ -35,6 +38,13 @@ from app.services.fir_service import (
     extract_and_save_fir_text,
 )
 from app.services.entity_extraction_service import extract_and_save_entities
+from app.services.similar_case_service import SimilarCaseService
+from app.services.investigation_copilot_service import InvestigationCopilotService
+from app.services.guardrail_service import GuardrailService
+from app.services.relationship_graph_service import RelationshipGraphService
+from app.services.investigation_recommendation_service import InvestigationRecommendationService
+from app.services.explainability_service import ExplainabilityService
+from app.core.exceptions import ServiceUnavailableException
 
 # Embedding imports
 from datetime import datetime
@@ -203,7 +213,7 @@ async def extract_fir_text_endpoint(
 
 @router.post(
     "/{fir_id}/entities",
-    response_model=list[FIREntityRead],
+    response_model=Dict[str, Any],
     status_code=status.HTTP_200_OK,
     summary="Extract structured entities from a FIR document using Gemini",
 )
@@ -211,11 +221,21 @@ async def extract_fir_entities_endpoint(
     fir_id: uuid.UUID,
     force_invalid_once: bool = False,
     db: AsyncSession = Depends(get_db),
-) -> list[FIREntityRead]:
+) -> Dict[str, Any]:
     logger.info("[POST /firs/%s/entities] Triggering entity extraction", fir_id)
+    # Validate input text of the FIR
+    from app.models.fir_document_content import FIRDocumentContent
+    content_stmt = select(FIRDocumentContent).where(FIRDocumentContent.fir_id == fir_id)
+    content_res = await db.execute(content_stmt)
+    doc_content = content_res.scalar_one_or_none()
+    if doc_content:
+        guardrails = GuardrailService(db)
+        await guardrails.check_input(doc_content.extracted_text, request_type="entity_extraction", fir_id=fir_id)
+
     try:
         entities = await extract_and_save_entities(db, fir_id, force_invalid_once=force_invalid_once)
-        return entities
+        explainability = ExplainabilityService(db)
+        return await explainability.explain_entity_extraction(fir_id, entities)
     except FileNotFoundError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -350,3 +370,143 @@ async def index_fir_document_endpoint(
         )
         
     return db_embedding
+
+
+@router.post("/{fir_id}/similar", response_model=Dict[str, Any])
+async def get_similar_cases_endpoint(
+    fir_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Find similar FIR documents in Qdrant and explain the reasons.
+    """
+    logger.info("[POST /firs/%s/similar] Finding similar cases", fir_id)
+    # Validate input text of the FIR
+    from app.models.fir_document_content import FIRDocumentContent
+    content_stmt = select(FIRDocumentContent).where(FIRDocumentContent.fir_id == fir_id)
+    content_res = await db.execute(content_stmt)
+    doc_content = content_res.scalar_one_or_none()
+    if doc_content:
+        guardrails = GuardrailService(db)
+        await guardrails.check_input(doc_content.extracted_text, request_type="similar_case_retrieval", fir_id=fir_id)
+
+    similar_service = SimilarCaseService(db)
+    try:
+        results = await similar_service.get_similar_cases(fir_id, limit=5)
+        explainability = ExplainabilityService(db)
+        return await explainability.explain_similar_cases(fir_id, results)
+    except ValueError as exc:
+        logger.warning("[POST /firs/%s/similar] Validation failure: %s", fir_id, exc)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc)
+        )
+    except ServiceUnavailableException as exc:
+        logger.error("[POST /firs/%s/similar] Service unavailable: %s", fir_id, exc)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc)
+        )
+    except Exception as exc:
+        logger.exception("[POST /firs/%s/similar] Unexpected error: %s", fir_id, exc)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Internal server error: {exc}"
+        )
+
+
+@router.post("/{fir_id}/copilot", response_model=Dict[str, Any])
+async def ask_investigation_copilot_endpoint(
+    fir_id: uuid.UUID,
+    req_body: CopilotQuestionRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Query the AI Investigation Copilot with a question about a specific FIR.
+    """
+    logger.info("[POST /firs/%s/copilot] Asking copilot: %s", fir_id, req_body.question)
+    
+    # Validate input user prompt
+    guardrails = GuardrailService(db)
+    await guardrails.check_input(req_body.question, request_type="copilot_input", fir_id=fir_id)
+
+    copilot_service = InvestigationCopilotService(db)
+    try:
+        result = await copilot_service.ask_copilot(fir_id, req_body.question)
+        
+        # Validate output AI response
+        result["answer"] = await guardrails.check_output(result["answer"], request_type="copilot_output", fir_id=fir_id)
+        
+        explainability = ExplainabilityService(db)
+        return await explainability.explain_copilot(fir_id, result)
+    except ValueError as exc:
+        logger.warning("[POST /firs/%s/copilot] Validation/State mismatch: %s", fir_id, exc)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc)
+        )
+    except Exception as exc:
+        logger.exception("[POST /firs/%s/copilot] Unexpected error: %s", fir_id, exc)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Internal server error: {exc}"
+        )
+
+
+@router.get("/{fir_id}/graph", response_model=Dict[str, Any])
+async def get_relationship_graph_endpoint(
+    fir_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Retrieve the criminal relationship graph for a specific FIR.
+    """
+    logger.info("[GET /firs/%s/graph] Building relationship graph", fir_id)
+    graph_service = RelationshipGraphService(db)
+    try:
+        graph = await graph_service.get_case_graph(fir_id)
+        return graph
+    except ValueError as exc:
+        logger.warning("[GET /firs/%s/graph] Validation error: %s", fir_id, exc)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc)
+        )
+    except Exception as exc:
+        logger.exception("[GET /firs/%s/graph] Unexpected error: %s", fir_id, exc)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Internal server error: {exc}"
+        )
+
+
+@router.post("/{fir_id}/recommendations", response_model=Dict[str, Any])
+async def get_investigation_recommendations_endpoint(
+    fir_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Retrieve prioritized next investigation steps for a specific FIR.
+    """
+    logger.info("[POST /firs/%s/recommendations] Fetching recommendations", fir_id)
+    rec_service = InvestigationRecommendationService(db)
+    try:
+        recommendations = await rec_service.generate_recommendations(fir_id)
+        explainability = ExplainabilityService(db)
+        return await explainability.explain_recommendations(fir_id, recommendations)
+    except ValueError as exc:
+        logger.warning("[POST /firs/%s/recommendations] Validation error: %s", fir_id, exc)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc)
+        )
+    except Exception as exc:
+        logger.exception("[POST /firs/%s/recommendations] Unexpected error: %s", fir_id, exc)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Internal server error: {exc}"
+        )
+
+
+
+
