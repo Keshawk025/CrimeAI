@@ -9,3 +9,7 @@ build/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+storage/
+scratch/
+app/mastra/node_modules/
+app/mastra/dist/

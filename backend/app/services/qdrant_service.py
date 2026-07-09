@@ -236,15 +236,14 @@ class QdrantService:
             method. The caller must supply a pre-computed vector.
         """
         try:
-            response = await self._client.query_points(
+            results = await self._client.search(
                 collection_name=self._collection,
-                query=query_vector,
+                query_vector=query_vector,
                 limit=top_k,
                 score_threshold=score_threshold if score_threshold > 0 else None,
                 query_filter=filters,
                 with_payload=True,
             )
-            results = response.points
             logger.debug(
                 "search_similar returned %d results (top_k=%d).", len(results), top_k
             )

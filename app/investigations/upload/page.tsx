@@ -32,7 +32,6 @@ import {
   Send,
   ShieldAlert,
   Cpu,
-  Network,
   Lightbulb,
   Eye,
   Shield,
@@ -893,7 +892,7 @@ export default function UploadPage() {
                     </p>
                   </div>
                 ) : (
-                  <table className="w-full text-left border-collapse">
+                  <table className="min-w-[1000px] w-full text-left border-collapse">
                     <thead>
                       <tr className="border-b border-white/[0.06] text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                         <th className="pb-3 pr-4 font-semibold">Case Number</th>
@@ -902,7 +901,7 @@ export default function UploadPage() {
                         <th className="pb-3 pr-4 font-semibold text-right">Size</th>
                         <th className="pb-3 pr-4 font-semibold text-center">Status</th>
                         <th className="pb-3 pr-4 font-semibold text-center">Uploaded At</th>
-                        <th className="pb-3 text-right">Action</th>
+                        <th className="pb-3 text-right w-[280px] min-w-[280px] font-semibold">Action</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-white/[0.04] text-sm">
@@ -965,7 +964,7 @@ export default function UploadPage() {
                             </div>
                           </td>
                           {/* Actions */}
-                          <td className="py-3.5 text-right">
+                          <td className="py-3.5 text-right w-[280px] min-w-[280px]">
                             <div className="flex items-center justify-end gap-1.5">
                               <button
                                 onClick={() => handleExtract(fir.id)}
@@ -1030,13 +1029,6 @@ export default function UploadPage() {
                               >
                                 <MessageSquare size={15} />
                               </button>
-                              <Link
-                                href={`/investigations/${fir.id}/graph`}
-                                className="text-muted-foreground hover:text-indigo-400 p-1.5 rounded-lg hover:bg-indigo-500/10 transition-all flex items-center justify-center"
-                                title="View Relationship Graph"
-                              >
-                                <Network size={15} />
-                              </Link>
                               <button
                                 onClick={() => handleFetchRecommendations(fir)}
                                 className="text-muted-foreground hover:text-amber-400 p-1.5 rounded-lg hover:bg-amber-500/10 transition-all flex items-center justify-center"

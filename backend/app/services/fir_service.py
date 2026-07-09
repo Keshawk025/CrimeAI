@@ -158,6 +158,7 @@ async def list_firs(
 ) -> tuple[int, list[FIR]]:
     """Return (total_count, paginated_list) of all FIRs ordered by upload time."""
     from sqlalchemy import func as sa_func
+    from sqlalchemy.orm import selectinload
 
     total_result = await db.execute(
         select(sa_func.count()).select_from(FIR)
@@ -165,14 +166,23 @@ async def list_firs(
     total = total_result.scalar_one()
 
     result = await db.execute(
-        select(FIR).order_by(FIR.uploaded_at.desc()).offset(skip).limit(limit)
+        select(FIR)
+        .options(selectinload(FIR.embedding))
+        .order_by(FIR.uploaded_at.desc())
+        .offset(skip)
+        .limit(limit)
     )
     return total, list(result.scalars().all())
 
 
 async def get_fir(db: AsyncSession, fir_id: uuid.UUID) -> FIR | None:
     """Fetch a single FIR by its UUID, or return None."""
-    result = await db.execute(select(FIR).where(FIR.id == fir_id))
+    from sqlalchemy.orm import selectinload
+    result = await db.execute(
+        select(FIR)
+        .options(selectinload(FIR.embedding))
+        .where(FIR.id == fir_id)
+    )
     return result.scalar_one_or_none()
 
 

@@ -41,7 +41,6 @@ from app.services.entity_extraction_service import extract_and_save_entities
 from app.services.similar_case_service import SimilarCaseService
 from app.services.investigation_copilot_service import InvestigationCopilotService
 from app.services.guardrail_service import GuardrailService
-from app.services.relationship_graph_service import RelationshipGraphService
 from app.services.investigation_recommendation_service import InvestigationRecommendationService
 from app.services.explainability_service import ExplainabilityService
 from app.core.exceptions import ServiceUnavailableException
@@ -447,33 +446,6 @@ async def ask_investigation_copilot_endpoint(
         )
     except Exception as exc:
         logger.exception("[POST /firs/%s/copilot] Unexpected error: %s", fir_id, exc)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Internal server error: {exc}"
-        )
-
-
-@router.get("/{fir_id}/graph", response_model=Dict[str, Any])
-async def get_relationship_graph_endpoint(
-    fir_id: uuid.UUID,
-    db: AsyncSession = Depends(get_db)
-):
-    """
-    Retrieve the criminal relationship graph for a specific FIR.
-    """
-    logger.info("[GET /firs/%s/graph] Building relationship graph", fir_id)
-    graph_service = RelationshipGraphService(db)
-    try:
-        graph = await graph_service.get_case_graph(fir_id)
-        return graph
-    except ValueError as exc:
-        logger.warning("[GET /firs/%s/graph] Validation error: %s", fir_id, exc)
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(exc)
-        )
-    except Exception as exc:
-        logger.exception("[GET /firs/%s/graph] Unexpected error: %s", fir_id, exc)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Internal server error: {exc}"

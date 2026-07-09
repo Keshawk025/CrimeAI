@@ -69,11 +69,15 @@ def _build_result(response: object, threshold: float) -> ValidationResult:
     a composite risk score as the max of all numeric scores and compare
     it against ``threshold`` to determine safety.
     """
+    resp_dict = response
+    if hasattr(response, "to_dict"):
+        resp_dict = response.to_dict()
+
     summary: dict = {}
-    if hasattr(response, "get_summary"):
+    if isinstance(resp_dict, dict):
+        summary = resp_dict.get("summary", {})
+    elif hasattr(response, "get_summary"):
         summary = response.get_summary()  # type: ignore[union-attr]
-    elif isinstance(response, dict):
-        summary = response.get("summary", {})
 
     # Collect issues (detectors that fired)
     issues: list[str] = []
