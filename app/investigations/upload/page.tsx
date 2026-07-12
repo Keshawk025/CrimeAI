@@ -36,6 +36,7 @@ import {
   Eye,
   Shield,
   Info,
+  Network,
 } from "lucide-react";
 import dynamic from "next/dynamic";
 
@@ -310,9 +311,10 @@ export default function UploadPage() {
   };
 
   // --- Extract Entities ---
-  const handleExtractEntities = async (id: string) => {
+  const handleExtractEntities = async (id: string, initialView: "list" | "graph" = "list") => {
     setExtractingEntitiesId(id);
     setActiveEntityFirId(id);
+    setEntitiesView(initialView);
     try {
       const res = await fetch(`${API_BASE_URL}/api/v1/firs/${id}/entities`, {
         method: "POST",
@@ -982,18 +984,30 @@ export default function UploadPage() {
                                   <Brain size={15} />
                                 )}
                               </button>
-                              <button
-                                onClick={() => handleExtractEntities(fir.id)}
-                                disabled={extractingId !== null || extractingEntitiesId !== null || indexingId !== null}
-                                className="text-muted-foreground hover:text-amber-400 p-1.5 rounded-lg hover:bg-amber-500/10 transition-all flex items-center justify-center disabled:opacity-50"
-                                title="Extract Entities"
-                              >
-                                {extractingEntitiesId === fir.id ? (
-                                  <Loader2 size={15} className="animate-spin text-amber-400" />
-                                ) : (
-                                  <Sparkles size={15} />
-                                )}
-                              </button>
+                                <button
+                                  onClick={() => handleExtractEntities(fir.id, "list")}
+                                  disabled={extractingId !== null || extractingEntitiesId !== null || indexingId !== null}
+                                  className="text-muted-foreground hover:text-amber-400 p-1.5 rounded-lg hover:bg-amber-500/10 transition-all flex items-center justify-center disabled:opacity-50"
+                                  title="Extract Entities (List View)"
+                                >
+                                  {extractingEntitiesId === fir.id && entitiesView === "list" ? (
+                                    <Loader2 size={15} className="animate-spin text-amber-400" />
+                                  ) : (
+                                    <Sparkles size={15} />
+                                  )}
+                                </button>
+                                <button
+                                  onClick={() => handleExtractEntities(fir.id, "graph")}
+                                  disabled={extractingId !== null || extractingEntitiesId !== null || indexingId !== null}
+                                  className="text-muted-foreground hover:text-purple-400 p-1.5 rounded-lg hover:bg-purple-500/10 transition-all flex items-center justify-center disabled:opacity-50"
+                                  title="Interactive Knowledge Graph"
+                                >
+                                  {extractingEntitiesId === fir.id && entitiesView === "graph" ? (
+                                    <Loader2 size={15} className="animate-spin text-purple-400" />
+                                  ) : (
+                                    <Network size={15} />
+                                  )}
+                                </button>
                               <button
                                 onClick={() => handleIndexFIR(fir.id)}
                                 disabled={extractingId !== null || extractingEntitiesId !== null || indexingId !== null}
