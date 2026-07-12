@@ -22,6 +22,7 @@ qdrant-client[fastembed]>=1.12,<2
 # Utilities
 python-dotenv==1.0.1
 python-multipart==0.0.32
+PyMuPDF>=1.23.0
 
 # Security — Enkrypt AI guardrails
 enkryptai-sdk>=1.0.35
