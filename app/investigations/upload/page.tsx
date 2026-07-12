@@ -35,7 +35,6 @@ import {
   Lightbulb,
   Eye,
   Shield,
-  Shield,
   Info,
 } from "lucide-react";
 import dynamic from "next/dynamic";
