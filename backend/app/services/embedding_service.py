@@ -44,7 +44,7 @@ class EmbeddingService:
         self.provider = settings.embedding_provider
         self.model_name = settings.embedding_model_name
         self.dimension = settings.vector_dimension
-        self.api_key = settings.gemini_api_key
+        self.api_key = settings.huggingface_api_key
 
     async def generate_embedding(self, text: str) -> List[float]:
         """
@@ -61,8 +61,9 @@ class EmbeddingService:
 
         for attempt in range(1, max_attempts + 1):
             try:
-                if self.provider == "gemini" and self.api_key and self.api_key != "your_gemini_api_key_here":
-                    vector = await self._generate_gemini_embedding(text)
+                logger.info("Embedding generation started (Provider: %s, Model: %s)", self.provider, self.model_name)
+                if self.provider == "huggingface" and self.api_key:
+                    vector = await self._generate_huggingface_embedding(text)
                 else:
                     vector = await self._generate_local_embedding(text)
 
@@ -73,6 +74,7 @@ class EmbeddingService:
                         f"does not match configured dimension {self.dimension}."
                     )
 
+                logger.info("Embedding generation completed (Dimension: %d)", len(vector))
                 return vector
 
             except Exception as exc:
@@ -91,35 +93,35 @@ class EmbeddingService:
 
         return generate_mock_embedding(text, self.dimension)
 
-    async def _generate_gemini_embedding(self, text: str) -> List[float]:
-        """Call the Google Gemini Embedding API."""
-        # Use httpx to make the REST call directly
-        url = f"https://generativelanguage.googleapis.com/v1beta/{self.model_name}:embedContent"
+    async def _generate_huggingface_embedding(self, text: str) -> List[float]:
+        """Call the Hugging Face Inference API for embeddings."""
+        url = f"https://api-inference.huggingface.co/pipeline/feature-extraction/{self.model_name}"
         
-        headers = {"Content-Type": "application/json"}
-        params = {"key": self.api_key}
-        payload = {
-            "model": self.model_name,
-            "content": {
-                "parts": [{"text": text}]
-            }
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json"
         }
+        payload = {"inputs": text}
 
         async with httpx.AsyncClient(timeout=15.0) as client:
-            res = await client.post(url, json=payload, headers=headers, params=params)
+            res = await client.post(url, json=payload, headers=headers)
             
             if res.status_code != 200:
                 raise httpx.HTTPStatusError(
-                    f"Gemini API returned status {res.status_code}: {res.text}",
+                    f"Hugging Face API returned status {res.status_code}: {res.text}",
                     request=res.request,
                     response=res,
                 )
             
             data = res.json()
-            if "embedding" in data and "values" in data["embedding"]:
-                return data["embedding"]["values"]
+            # If a list of floats is returned directly
+            if isinstance(data, list) and len(data) > 0 and isinstance(data[0], float):
+                return data
+            # If a list of lists is returned
+            elif isinstance(data, list) and len(data) > 0 and isinstance(data[0], list):
+                return data[0]
             
-            raise ValueError(f"Unexpected response structure from Gemini Embedding API: {data}")
+            raise ValueError(f"Unexpected response structure from Hugging Face API: {data}")
 
     async def _generate_local_embedding(self, text: str) -> List[float]:
         """Generate embedding locally using fastembed, with deterministic fallback."""
@@ -133,9 +135,9 @@ class EmbeddingService:
             def _embed():
                 # We load/instantiate inside or use a class-level cache
                 # BAAI/bge-small-en-v1.5 has 384 dimensions. models/text-embedding-004 has 768.
-                # If model_name is set to gemini models but we are in local provider, default to a fastembed model.
+                # If model_name is not natively supported by fastembed, fallback to BAAI.
                 model_to_use = self.model_name
-                if "gemini" in model_to_use or "text-embedding" in model_to_use:
+                if "BAAI" not in model_to_use and "sentence-transformers" not in model_to_use:
                     model_to_use = "BAAI/bge-small-en-v1.5"
                 
                 model = TextEmbedding(model_name=model_to_use)

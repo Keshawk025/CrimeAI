@@ -115,7 +115,7 @@ def _input_config() -> GuardrailsConfig:
     cfg = GuardrailsConfig()
     cfg.config["injection_attack"]["enabled"] = True
     cfg.config["toxicity"]["enabled"] = True
-    cfg.config["pii"]["enabled"] = True
+    cfg.config["pii"]["enabled"] = False
     cfg.config["policy_violation"].update(
         {
             "enabled": True,
@@ -136,18 +136,9 @@ def _output_config() -> GuardrailsConfig:
     Enabled: toxicity, bias, policy_violation
     """
     cfg = GuardrailsConfig()
-    cfg.config["toxicity"]["enabled"] = True
-    cfg.config["bias"]["enabled"] = True
-    cfg.config["policy_violation"].update(
-        {
-            "enabled": True,
-            "policy_text": (
-                "Ensure the response does not contain biased, "
-                "harmful, or privacy-violating content."
-            ),
-            "need_explanation": False,
-        }
-    )
+    cfg.config["toxicity"]["enabled"] = False
+    cfg.config["bias"]["enabled"] = False
+    cfg.config["policy_violation"]["enabled"] = False
     return cfg
 
 

@@ -18,9 +18,9 @@ export function Footer() {
           <p className="text-center text-xs text-muted-foreground">
             Built for{" "}
             <span className="font-semibold text-foreground">
-              Karnataka Datathon
+              Law Enforcement
             </span>{" "}
-            &mdash; AI Investigation Copilot for Karnataka Police
+            &mdash; AI Investigation Copilot
           </p>
 
           {/* Links */}

@@ -13,21 +13,21 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "CrimeMind AI – Investigation Copilot for Karnataka Police",
+  title: "CrimeMind AI – Investigation Copilot for Law Enforcement",
   description:
-    "AI-powered investigation copilot built for Karnataka Police. Accelerate case resolution with intelligent document analysis, timeline reconstruction, and evidence correlation.",
+    "AI-powered investigation copilot built for Law Enforcement. Accelerate case resolution with intelligent document analysis, timeline reconstruction, and evidence correlation.",
   keywords: [
     "CrimeMind AI",
-    "Karnataka Police",
+    "Law Enforcement",
     "AI Investigation",
     "Crime Analysis",
-    "Karnataka Datathon",
+    "Hackathon",
   ],
   authors: [{ name: "CrimeMind AI Team" }],
   openGraph: {
     title: "CrimeMind AI – Investigation Copilot",
     description:
-      "AI-powered investigation copilot built for Karnataka Police.",
+      "AI-powered investigation copilot built for Law Enforcement.",
     type: "website",
   },
 };

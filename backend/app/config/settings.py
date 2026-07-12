@@ -79,10 +79,11 @@ class Settings(BaseSettings):
     qdrant_collection: str = "crime_reports"
     vector_dimension: int = 768          # must match the embedding model output
 
-    # ── Gemini ─────────────────────────────────────────────────
+    # ── AI Providers ───────────────────────────────────────────
     gemini_api_key: str | None = None
-    embedding_provider: Literal["gemini", "local"] = "gemini"
-    embedding_model_name: str = "models/text-embedding-004"
+    huggingface_api_key: str | None = None
+    embedding_provider: Literal["huggingface", "local"] = "huggingface"
+    embedding_model_name: str = "sentence-transformers/all-mpnet-base-v2"
 
     # ── Server ─────────────────────────────────────────────────
     host: str = "0.0.0.0"
