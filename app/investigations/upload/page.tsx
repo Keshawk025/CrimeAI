@@ -35,8 +35,12 @@ import {
   Lightbulb,
   Eye,
   Shield,
+  Shield,
   Info,
 } from "lucide-react";
+import dynamic from "next/dynamic";
+
+const KnowledgeGraph = dynamic(() => import("@/components/KnowledgeGraph"), { ssr: false });
 
 // --- Explainability Panel Component ---
 interface ExplainabilityData {
@@ -231,6 +235,7 @@ export default function UploadPage() {
   const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({});
   const [activeEntityFirId, setActiveEntityFirId] = useState<string | null>(null);
   const [entitiesExplainability, setEntitiesExplainability] = useState<ExplainabilityData | null>(null);
+  const [entitiesView, setEntitiesView] = useState<"list" | "graph">("list");
 
   // --- Embedding / Indexing States ---
   const [indexingId, setIndexingId] = useState<string | null>(null);
@@ -1196,6 +1201,18 @@ export default function UploadPage() {
                 </div>
               ) : (
                 <div className="space-y-4">
+                  {/* View Toggle */}
+                  <div className="flex bg-white/[0.04] p-1 rounded-lg w-max mb-2">
+                    <button onClick={() => setEntitiesView("list")} className={`px-4 py-1.5 text-xs font-semibold rounded-md transition-colors ${entitiesView === "list" ? "bg-white/10 text-white shadow-sm" : "text-zinc-400 hover:text-white hover:bg-white/[0.02]"}`}>List View</button>
+                    <button onClick={() => setEntitiesView("graph")} className={`px-4 py-1.5 text-xs font-semibold rounded-md transition-colors ${entitiesView === "graph" ? "bg-white/10 text-white shadow-sm" : "text-zinc-400 hover:text-white hover:bg-white/[0.02]"}`}>Knowledge Graph</button>
+                  </div>
+
+                  {entitiesView === "graph" ? (
+                    <div className="w-full relative rounded-xl overflow-hidden shadow-inner bg-black/50 border border-white/[0.04]">
+                       <KnowledgeGraph entities={selectedEntities} caseNumber={firs.find(f => f.id === activeEntityFirId)?.case_number || "Unknown"} />
+                    </div>
+                  ) : (
+                    <>
                   {/* Summary / Total counter */}
                   <div className="flex items-center justify-between text-xs text-muted-foreground bg-white/[0.02] border border-white/[0.04] px-4 py-2.5 rounded-lg">
                     <span>Total Entities Found: <strong className="text-foreground">{selectedEntities.length}</strong></span>
@@ -1331,6 +1348,8 @@ export default function UploadPage() {
                       </div>
                     );
                   })}
+                  </>
+                  )}
                 </div>
               )}
             </div>
